@@ -31,6 +31,12 @@ void CLogReader::Close()
 //установка фильтра строк, false - ошибка
 bool CLogReader::SetFilter(const char *filter)
 {
+	if (!filter || !*filter)
+	{
+		m_spFilter.reset();
+		return true;
+	}
+
 	m_spFilter.reset(new CFilter());
 	return m_spFilter->Parse(filter);
 }
