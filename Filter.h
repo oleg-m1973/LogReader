@@ -39,7 +39,7 @@ public:
 		while(psz != end)
 		{
 			auto p = _Test(psz, end);
-			if (!p)
+			if (!p || p == psz)
 				break;
 
 			psz = p;
