@@ -74,14 +74,13 @@ bool CLogReader::GetNextLine(char *buf, const size_t sz)
 
 				auto data = std::move(m_data); //Сбрасываем буфер
 				char *psz = m_buf.get() + line; //Указатель на начало строки
-				char *endl = m_buf.get() + m_buf_idx;
-				if (data.empty()) //Если строка полностью находится в буфере
-					m_buf[m_buf_idx] = 0;
-				else //Если есть незаконченная строка 
+				char *endl = m_buf.get() + m_buf_idx + 1; //Конец строки, включая 0
+				m_buf[m_buf_idx] = 0;
+
+				if (!data.empty()) //Если есть незаконченная строка 
 				{
 					//Добавляем остаток строки
 					data.insert(data.end(), psz, endl);
-					data.push_back(0);
 					psz = data.data();
 					endl = psz + data.size();
 				}
