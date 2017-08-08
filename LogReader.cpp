@@ -71,7 +71,7 @@ bool CLogReader::GetNextLine(char *buf, const size_t sz)
 			if (m_buf[m_buf_idx] != '\n')
 				continue;
 
-			CDataBuffer data; 
+			CLineBuffer data; 
 			data.swap(m_data); //Сбрасываем буфер
 
 			char *psz = m_buf + line; //Указатель на начало строки
@@ -99,7 +99,7 @@ bool CLogReader::GetNextLine(char *buf, const size_t sz)
 
 	if (!m_data.empty()) //Если в буфере осталась строка
 	{
-		CDataBuffer data; 
+		CLineBuffer data; 
 		data.swap(m_data); //Сбрасываем буфер
 		if (TestLine(data.data(), data.data() + data.size() + 1))
 		{

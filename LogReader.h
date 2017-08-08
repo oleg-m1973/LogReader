@@ -3,16 +3,16 @@
 
 //Буфер для хранения незавершённой строки
 //В конце - всегда 0
-class CDataBuffer
+class CLineBuffer
 {
 public:
-	CDataBuffer()
+	CLineBuffer()
 	: m_data(nullptr)
 	, m_sz(0)
 	{
 	}
 
-	~CDataBuffer()
+	~CLineBuffer()
 	{
 		Clear();
 	}
@@ -59,7 +59,7 @@ public:
 		return m_sz;
 	}
 
-	void swap(CDataBuffer &src)
+	void swap(CLineBuffer &src)
 	{
 		auto *data = m_data;
 		auto sz = m_sz;
@@ -111,7 +111,7 @@ protected:
 	size_t m_buf_idx; //Текущее смещение в буфере
 	char *m_buf; //Буфер данных для нового блока
 
-	CDataBuffer m_data; //Не законченная в предыдущей итерации строка
+	CLineBuffer m_data; //Не законченная в предыдущей итерации строка
 
 	CFilter m_filter;
 };
