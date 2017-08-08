@@ -1,6 +1,79 @@
 #pragma once
 #include "Filter.h"
-#include <vector>
+
+//Буфер для хранения незавершённой строки
+//В конце - всегда 0
+class CDataBuffer
+{
+public:
+	CDataBuffer()
+	: m_data(nullptr)
+	, m_sz(0)
+	{
+	}
+
+	~CDataBuffer()
+	{
+		Clear();
+	}
+		
+	//Добавить данные
+	bool Push(const char *data, size_t sz)
+	{
+		if (!sz)
+			return true;
+
+		char *p = (char *)realloc(m_data, m_sz + sz + 1); //Выделяем память +'\0'
+		if (!p)
+			return false;
+
+		memcpy(p + m_sz, data, sz);
+
+		m_data = p;
+		m_sz += sz;
+				
+		m_data[m_sz] = 0;
+		return true;
+	}
+
+	//Очистить буфер
+	void Clear()
+	{
+		free(m_data);
+		m_data = nullptr;
+		m_sz = 0;
+	}
+
+	char *data() const
+	{
+		return m_data;
+	}
+
+	bool empty() const
+	{
+		return m_sz == 0;
+	}
+
+	size_t size() const
+	{
+		return m_sz;
+	}
+
+	void swap(CDataBuffer &src)
+	{
+		auto *data = m_data;
+		auto sz = m_sz;
+
+		m_data = src.m_data;
+		m_sz = src.m_sz;
+		
+		src.m_data = data;
+		src.m_sz = sz;
+	}
+protected:
+	char *m_data;
+	size_t m_sz;
+};
 
 class CLogReader
 {
@@ -36,9 +109,9 @@ protected:
 	size_t m_buf_cap; //Размер буфера
 	DWORD m_buf_sz; //Количество, считанное в последней итурации
 	size_t m_buf_idx; //Текущее смещение в буфере
-	std::unique_ptr<char[]> m_buf; //Буфер данных для нового блока
+	char *m_buf; //Буфер данных для нового блока
 
-	std::vector<char> m_data; //Не законченная в предыдущей итерации строка
+	CDataBuffer m_data; //Не законченная в предыдущей итерации строка
 
-	std::unique_ptr<CFilter> m_spFilter;
+	CFilter m_filter;
 };

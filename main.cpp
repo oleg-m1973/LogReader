@@ -3,32 +3,30 @@
 
 int main(int argc, char *argv[])
 {
-	setlocale(LC_CTYPE, "Russian");
-
 	if (argc < 3)
 	{
-		std::cerr << "Usage: LogReader pattern file" << std::endl;
+		fprintf(stderr, "Usage: LogReader pattern file\n");
 		return -1;
 	}
 
 	const char *pattern = argv[1];
 	const char *file = argv[2];
-	
 
-	std::clog << "File: " << file << std::endl;
-	std::clog << "Pattern: " << pattern << std::endl;
+
+	fprintf(stderr, "File: %s\n", file);
+	fprintf(stderr, "Pattern: %s\n", pattern);
 
 	CLogReader reader;
 
 	if (!reader.SetFilter(pattern))
 	{
-		std::cerr << "Invalid pattern " << pattern << std::endl;
+		fprintf(stderr, "Invalid pattern %s\n", pattern);
 		return -1;
 	}
 
 	if (!reader.Open(file))
 	{
-		std::cerr << "Can't open file " << file << std::endl;
+		fprintf(stderr, "Can't open file %s\n", file);
 		return -1;
 	}
 
@@ -39,11 +37,11 @@ int main(int argc, char *argv[])
 	size_t n = 0;
 	for (; reader.GetNextLine(buf, _sz); ++n)
 	{
-		std::cout << buf << std::endl;
+		fprintf(stdout, "%s\n", buf);
 	}
 
 	tm = ::GetTickCount() - tm;
-	std::clog << "Found " << n <<  " lines, " << (double(tm) / 1000.0) << " sec" << std::endl;
+	fprintf(stderr, "Found %u lines, %f sec\n", n, double(tm) / 1000.0);
 	return 0;
 }
 

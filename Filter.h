@@ -1,5 +1,4 @@
 #pragma once
-#include <vector>
 
 //Элементы шаблона
 // ? - Один любой символ
@@ -20,13 +19,19 @@ friend class CFilter;
 public:
 	CFilterToken()
 	: m_repeat(false)
+	, m_next(nullptr)
 	{
 	}
 
 	virtual ~CFilterToken()
 	{
+		delete m_next;
 	}
 	
+	//Начитывает элемент из строки шаблона
+	//Возвращает указатель на следующий элемент, или nullptr в случае ошибки
+	virtual const char *Read(const char *psz) = 0;
+
 	//Проверяет соответствие строки эелемнту шаблона
 	//psz - начало строки, endl - конец строки, включая завершающий 0
 	//Возвращает указатель на следующий символ или nullptr в случе неудачи
@@ -53,6 +58,7 @@ protected:
 	virtual const char *_Test(const char *psz, const char *endl) = 0;
 
 	bool m_repeat; //Повторять пока соответствует
+	CFilterToken *m_next;
 };
 
 //Шаблон фильтра
@@ -62,22 +68,56 @@ class CFilter
 public:
 	CFilter()
 	: m_bol(true)
+	, m_first(nullptr)
+	, m_last(nullptr)
+	, m_next(nullptr)
 	{
 	}
 
+	~CFilter()
+	{
+		Reset();
+	}
 	bool Parse(const char *psz);
 	bool Test(const char *psz, const char *endl);
 
 	void Reset()
 	{
 		m_bol = true;
-		m_tokens.clear();
-		m_spNext.reset();
+		delete m_first;
+		delete m_next;
+
+		m_next = nullptr;
+		m_first = m_last = nullptr;
 	}
+
 protected:
+	bool IsEmpty() const
+	{
+		return m_last == nullptr;
+	}
+
+	//Добавляет новый элемент шаблона
+	//Возвращает указатель на следующий символ или nullptr в случае ошибки
+	template <typename T>
+	const char *AddToken(const char *psz)
+	{
+		auto *p = new T();
+		if (m_last)
+			m_last = m_last->m_next = p;
+		else
+			m_first = m_last = p;
+
+		return p->Read(psz);
+	}
+
 	const char *ApplyTokens(const char *psz, const char *endl);
 
 	bool m_bol; //Проверять с начала строки
-	std::vector<std::unique_ptr<CFilterToken>> m_tokens; //Элементы шаблона
-	std::unique_ptr<CFilter> m_spNext; //Следующий фильтр
+
+	//Элементы шаблона
+	CFilterToken *m_first;  //Первый
+	CFilterToken *m_last; //Последний
+	
+	CFilter *m_next; //Следующий фильтр
 };

@@ -1,7 +1,5 @@
 #include "stdafx.h"
 #include "Filter.h"
-#include <locale>
-#include <algorithm>
 
 ////////////////////////////////////////////////////////////////////////////////////////
 //CFilterToken
@@ -14,9 +12,26 @@ class CFilterSymbol
 : public CFilterToken
 {
 public:
-	CFilterSymbol(char ch)
-	: m_ch(ch) 
+	CFilterSymbol()
+	: m_ch(0)
 	{
+	}
+
+	virtual const char *Read(const char *psz)
+	{
+		m_ch = *psz;
+		if (m_ch != '\\')
+			return psz + 1;
+		
+		m_ch = psz[1];
+		switch (m_ch)
+		{
+		case 't': m_ch = '\t'; break;
+		case 'r': m_ch = '\r'; break;
+		case 0: return nullptr;
+		}
+
+		return psz + 2;
 	}
 
 protected:
@@ -32,6 +47,12 @@ protected:
 class CFilterAnySymbol
 : public CFilterToken
 {
+public:
+	virtual const char *Read(const char *psz)
+	{
+		return psz + 1; // "?"
+	}
+
 protected:
 	virtual const char *_Test(const char *psz, const char *endl)
 	{
@@ -43,6 +64,12 @@ protected:
 class CFilterSpace
 : public CFilterToken
 {
+public:
+	virtual const char *Read(const char *psz)
+	{
+		return psz + 2; // "\s"
+	}
+
 protected:
 	virtual const char *_Test(const char *psz, const char *endl)
 	{
@@ -55,35 +82,42 @@ class CFilterOneOf
 : public CFilterToken
 {
 public:
-	CFilterOneOf(const char *&psz)
+	CFilterOneOf()
+	: m_psz(nullptr)
 	{
-		if (*psz != '[')
-			return;
+	}
 
-		m_symbols.reserve(16);
-		for (++psz; *psz && *psz != ']'; ++psz)
+	~CFilterOneOf()
+	{
+		delete m_psz;
+	}
+
+	virtual const char *Read(const char *psz)
+	{
+		if (*psz != '[' || !psz[1])
+			return nullptr;
+
+		m_psz = new char[strlen(++psz) + 1];
+		for (char *p = m_psz; *psz && *psz != ']'; ++psz, ++p)
 		{
 			char ch = *psz;
 			if (ch == '\\' && psz[1] ==']')
 				ch = (*++psz);
 
-			m_symbols.emplace_back(ch);
+			*p = ch;
 		};
 
-		std::sort(m_symbols.begin(), m_symbols.end());
-		if (*psz == ']')
-			++psz;
+		return *psz == ']'? psz + 1: nullptr;
 	}
 
 protected:
 	virtual const char *_Test(const char *psz, const char *endl)
 	{
-		return 
-			m_symbols.empty()? psz: 
-			std::binary_search(m_symbols.begin(), m_symbols.end(), *psz)? ++psz: nullptr;
+		//если пустой [] возвращаем текущий символ
+		return m_psz? (strchr(m_psz, *psz) != nullptr? ++psz: nullptr): psz; 
 	}
 
-	std::vector<char> m_symbols;
+	char *m_psz;
 };
 
 } //namespace
@@ -95,63 +129,50 @@ protected:
 bool CFilter::Parse(const char *psz)
 {
 	Reset();
-	std::unique_ptr<CFilterToken> sp;
-	for (;*psz; ++psz)
+	while (*psz)
 	{
 		char ch = *psz;
 		switch (ch)
 		{
-		case '?': sp.reset(new CFilterAnySymbol()); break; 
-		case '[': sp.reset(new CFilterOneOf(psz)); break; 
+		case '?': psz = AddToken<CFilterAnySymbol>(psz); break; 
+		case '[': psz = AddToken<CFilterOneOf>(psz); break; 
 		case '\\':
-			ch = psz[1];
-			if (ch)
+			switch (psz[1])
 			{
-				++psz;
-				switch (ch)
-				{
-				case 's': sp.reset(new CFilterSpace()); break;
-				case 't': sp.reset(new CFilterSymbol('\t')); break;
-				case 'r': sp.reset(new CFilterSymbol('\r')); break;
-				default: 
-					sp.reset(new CFilterSymbol(ch));
-				}
+			case 's': psz = AddToken<CFilterSpace>(psz); break;
+			default: psz = AddToken<CFilterSymbol>(psz); break;
 			}
 			break;
 		case '+': //Устанавливаем флаг повторения для пердыдущего элемента, новый элемент не создаётся
-			if (!m_tokens.empty())
-				m_tokens.back()->m_repeat = true;
+			if (m_last)
+				m_last->m_repeat = true;
+			++psz;
 			break;
 		case '*':
 			{
-				if (!sp && m_tokens.empty()) //Повторяем, пока отсутствуют элементы шаблона. На случай ****
+				if (IsEmpty()) //Повторяем, пока отсутствуют элементы шаблона. На случай ****
 				{
 					m_bol = false; //Сбрасываем признак поиска с начала строки
+					++psz;
 					continue;
 				}
 
-				if (sp) //Сохраняем текущий элемент, если есть
-					m_tokens.emplace_back(std::move(sp));
-
-				m_spNext.reset(new CFilter()); //Создаём следующий фильтр
-				if (!m_spNext->Parse(psz))
+				m_next = new CFilter(); //Создаём следующий фильтр
+				if (!m_next->Parse(psz))
 					return false;
 			}
 			return true; //Загрузка завершена
 		default: 
-			sp.reset(new CFilterSymbol(ch));
+			psz = AddToken<CFilterSymbol>(psz);
 		}
 
-		if (sp)
-			m_tokens.emplace_back(std::move(sp));
+		if (!psz) //Ошибка при чтении элемента шаблона
+			return false; 
 	}
 
 	//Если фильтр не содержит * в конце, добавляем элемент для поиска до конца строки, символ 0
-	if (!m_tokens.empty())
-	{
-		sp.reset(new CFilterSymbol('\0'));
-		m_tokens.emplace_back(std::move(sp));
-	}
+	if (!IsEmpty())
+		AddToken<CFilterSymbol>("\0");
 
 	return true;
 }
@@ -159,7 +180,7 @@ bool CFilter::Parse(const char *psz)
 //Проверяет соответсвие строки psz шаблону
 bool CFilter::Test(const char *psz, const char *endl)
 {
-	if (m_tokens.empty()) //Если элементов шаблона нет, то это заверщающая *, можно не бежать до конца строки
+	if (IsEmpty()) //Если элементов шаблона нет, то это заверщающая *, можно не бежать до конца строки
 		return true;
 
 	//Бежим по строке, по одному символу, пока не будет найдено соответствие
@@ -179,19 +200,19 @@ bool CFilter::Test(const char *psz, const char *endl)
 	};
 
 	//Если строка соответсвует шаблону проверяем следующий фильтр, если он есть
-	return psz != nullptr && (!m_spNext || m_spNext->Test(psz, endl));
+	return psz != nullptr && (!m_next || m_next->Test(psz, endl));
 }
 
 //Проверяет строку на соответсвие всем элементым шаблона,
 //Возвращает указатель на следующий символ или nullptr вслучае неуспеха
 const char *CFilter::ApplyTokens(const char *psz, const char *endl)
 {
-	for (auto it = m_tokens.begin(), end = m_tokens.end(); it != end; ++it)
+	for (auto *token = m_first; token != nullptr; token = token->m_next)
 	{
 		if (psz == endl)
 			return nullptr;
 
-		auto p = (*it)->Test(psz, endl);
+		auto p = token->Test(psz, endl);
 		if (!p)
 			return nullptr;
 
